@@ -1,0 +1,62 @@
+import random
+from prettytable import PrettyTable
+import matplotlib.pyplot as plt
+import statistics
+import math
+import numpy as np
+
+
+ruleta = list(range(0, 37))
+
+
+
+tabla_resultados = PrettyTable()
+tabla_resultados.field_names = ["Tirada", "Número", "Frecuencia Absoluta", "Frecuencia Relativa", "Promedio", "Varianza", "Desvio"]
+
+
+def tiradas():
+  frecuencia_absoluta = 0
+  numeros = [] 
+  frecuencias_relativas = []
+  promedios = []
+  varianzas = []
+  desvios = []
+  numTiradas = 10000
+
+  for i in range(numTiradas):
+      numero = random.choice(ruleta)
+      numeros.append(numero)
+      if numero == 17:
+        frecuencia_absoluta += 1
+      frecuencias_relativas.append(frecuencia_absoluta/(i+1))
+      promedios.append(statistics.fmean(numeros))
+      varianzas.append(np.var(numeros))
+      desvios.append(np.std(numeros))
+  return promedios,frecuencias_relativas, varianzas, desvios
+
+fig, ax = plt.subplots(nrows=2, ncols=2)
+
+for i in range(0,4):
+    tirada = tiradas()
+    ax[0,0].plot(tirada[0])
+    ax[0,1].plot(tirada[1])
+    ax[1,0].plot(tirada[2])
+    ax[1,1].plot(tirada[3])
+
+ax[0,0].axhline(y=18, color='black')
+ax[0,1].axhline(y=1/37, color='black')
+ax[1,0].axhline(y=114, color='black')
+ax[1,1].axhline(y=np.sqrt(114), color='black')
+ax[0,0].set_ylim(0, 37)
+ax[0,0].set_yticks(range(0,37,4))
+ax[0,0].set_xlabel("Tiradas")
+ax[0,0].set_ylabel("Media")
+plt.tight_layout()
+ax[0,1].set_xlabel("Tiradas")
+ax[0,1].set_ylabel("Frecuencia relativa")
+plt.tight_layout
+ax[1,0].set_xlabel("Tiradas")
+ax[1,0].set_ylabel("Varianza matemática")
+ax[1,1].set_xlabel("Tiradas")
+ax[1,1].set_ylabel("Desvío estándar")
+plt.show()
