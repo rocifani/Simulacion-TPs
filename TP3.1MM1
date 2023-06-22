@@ -1,0 +1,125 @@
+import random
+import simpy
+import matplotlib.pyplot as plt
+
+# Parámetros del sistema
+tiempo_simulacion = 500000  # Tiempo total de simulación
+tasa_llegada = 0.66 # Parámetro lambda de la distribución exponencial para la tasa de llegada
+tasa_servicio = 0.7  # Parámetro mu de la distribución exponencial para la tasa de servicio
+
+# Variables de rendimiento
+num_clientes_atendidos = 0
+num_denegaciones_servicio = 0
+tiempo_total_sistema = 0
+tiempo_total_cola = 0
+tiempo_total_servicio = 0
+num_clientes_en_cola = 0
+tamano_cola = []
+
+# Variables para el gráfico de evolución de la cola de espera
+tiempos = []  # Lista para almacenar los momentos en los que cambia la cola
+cola_espera = []  # Lista para almacenar el tamaño de la cola en cada momento
+
+# Variables para el gráfico del estado del servidor
+estados_servidor = []  # Lista para almacenar el estado del servidor (1: ocupado, 0: libre)
+
+def cliente(env, nombre, servidor):
+    llegada = env.now
+    print(f'{nombre} llegó al sistema en el tiempo {llegada:.2f}')
+
+    global num_clientes_en_cola, tiempos, cola_espera, tamano_cola, estados_servidor  # Declarar las variables globales
+
+    with servidor.request() as req:
+        yield req
+
+        espera = env.now - llegada
+        print(f'{nombre} comenzó a ser atendido en el tiempo {env.now:.2f} (espera: {espera:.2f})')
+
+        servicio = random.expovariate(tasa_servicio)
+        yield env.timeout(servicio)
+
+        tiempo_salida = env.now
+        print(f'{nombre} se fue en el tiempo {tiempo_salida:.2f} (servicio: {servicio:.2f})')
+
+        global num_clientes_atendidos, tiempo_total_sistema, tiempo_total_cola, tiempo_total_servicio
+        num_clientes_atendidos += 1
+        tiempo_total_sistema += tiempo_salida - llegada
+        tiempo_total_cola += espera
+        tiempo_total_servicio += servicio
+        num_clientes_en_cola -= 1
+
+        tamano_cola.append(num_clientes_en_cola)  # Almacena el tamaño de la cola actual
+
+        tiempos.append(env.now)  # Almacena el momento en que disminuye o aumenta la cola
+        cola_espera.append(max(0, num_clientes_en_cola))  # Almacena el tamaño actual de la cola (mínimo 0)
+
+        estados_servidor.append(0 if servidor.count == 0 else 1)  # Almacena el estado actual del servidor
+
+# Configuración y ejecución de la simulación
+env = simpy.Environment()
+servidor = simpy.Resource(env, capacity=1)
+cola_clientes = simpy.Resource(env, capacity=1)  # Cola de clientes
+
+def llegada_clientes(env, servidor, cola_clientes):
+    global num_clientes_en_cola, tiempos, cola_espera, tamano_cola, estados_servidor  # Declarar las variables globales
+    i = 0
+    while True:
+        yield env.timeout(random.expovariate(tasa_llegada))
+        i += 1
+        env.process(cliente(env, f'Cliente {i}', servidor))
+        num_clientes_en_cola += 1
+        if i == 1:
+            tiempos.append(env.now)  # Almacena el momento en que comienza el primer cliente
+            cola_espera.append(0)  # La cola comienza en cero
+        else:
+            tiempos.append(env.now)  # Almacena el momento en que disminuye o aumenta la cola
+            cola_espera.append(max(0, num_clientes_en_cola - 1))  # Almacena el tamaño actual de la cola (mínimo 0)
+        estados_servidor.append(0 if servidor.count == 0 else 1)  # Almacena el estado actual del servidor
+
+env.process(llegada_clientes(env, servidor, cola_clientes))
+env.run(until=tiempo_simulacion)
+
+# Resultados
+tiempo_promedio_sistema = tiempo_total_sistema / num_clientes_atendidos
+tiempo_promedio_cola = tiempo_total_cola / num_clientes_atendidos
+tiempo_promedio_servicio = tiempo_total_servicio / num_clientes_atendidos
+promedio_clientes_sistema = tiempo_total_sistema / tiempo_simulacion
+promedio_clientes_cola = tiempo_total_cola / tiempo_simulacion
+utilizacion_servidor = (tiempo_total_servicio / tiempo_simulacion) * 100
+
+# Gráfico de la evolución de la cola de espera
+plt.figure(figsize=(10, 6))
+plt.step(tiempos, cola_espera, where='post')
+plt.xlabel('Tiempo')
+plt.ylabel('Clientes en cola de espera')
+plt.title('Evolución de la cola de espera a lo largo del tiempo')
+plt.grid(True)
+plt.show()
+
+# Histograma del estado del servidor
+plt.figure(figsize=(10, 4))
+plt.step(tiempos, estados_servidor, where='post')
+plt.xlabel('Tiempo')
+plt.ylabel('Estado del servidor')
+plt.title('Estado del servidor a lo largo del tiempo')
+plt.ylim(-0.1, 1.1)
+plt.grid(True)
+plt.show()
+
+# Probabilidad de encontrar N clientes en cola (ingresado por teclado)
+n = 2
+probabilidad_n_clientes = cola_espera.count(n) / len(cola_espera)
+
+# Resultados
+probabilidad_denegacion_servicio = num_denegaciones_servicio / num_clientes_atendidos
+
+print('\nResultados de la simulación:')
+print(f'Número de clientes atendidos: {num_clientes_atendidos}')
+print(f'Tiempo promedio en el sistema: {tiempo_promedio_sistema:.2f}')
+print(f'Tiempo promedio en la cola: {tiempo_promedio_cola:.2f}')
+print(f'Tiempo promedio de servicio: {tiempo_promedio_servicio:.2f}')
+print(f'Promedio de clientes en el sistema: {promedio_clientes_sistema:.2f}')
+print(f'Promedio de clientes en la cola: {promedio_clientes_cola:.2f}')
+print(f'Porcentaje de utilización del servidor: {utilizacion_servidor:.2f}%')
+print(f'Probabilidad de encontrar {n} clientes en cola: {probabilidad_n_clientes:.4f}')
+print(f'Probabilidad de denegación de servicio: {probabilidad_denegacion_servicio:.4f}')
